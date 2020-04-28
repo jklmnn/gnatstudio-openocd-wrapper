@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import argparse
+import configparser
+import paramiko
+import scp
+import telnetlib
+
+def copy_file(source, path, host, user):
+    _, program = os.path.split(source)
+    target = os.path.join(path, program)
+    client = paramiko.SSHClient()
+    client.load_system_host_keys()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(host, 22, user)
+    scp_client = scp.SCPClient(client.get_transport())
+    scp_client.put(source, target)
+    return target
+
+def program(args, config):
+    print(args)
+    args[1] = copy_file(args[1], config["path"], config["host"], config["user"])
+    print(args, config["host"], config["port"])
+    with telnetlib.Telnet(config["host"], int(config["port"])) as tn:
+        cmd = " ".join(filter(lambda arg: arg != "exit", args)).encode("utf-8")
+        print(cmd)
+        tn.write(cmd + b"\n")
+        print(tn.read_until(b"** Resetting Target **"))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file", "-f", help="use configuration file <name>")
+    parser.add_argument("--command", "-c", help="run <command>")
+    args = parser.parse_args()
+    print(args)
+    config = configparser.ConfigParser()
+    config.read(args.file)
+    print(config.sections())
+    for key in config["DEFAULT"]:
+        print(key, config["DEFAULT"][key])
+    command = args.command.strip(" ").split(" ")
+    if command[0] == "program":
+        program(command, config["DEFAULT"])
+    elif command[0] == "arm":
+        # see share/gnatstudio/support/ui/board_support.py: __get_connection_detection_regexp
+        print(".cpu: hardware has")
+    else:
+        print(f"Unsupported command: {args.command}")
+        exit(1)
